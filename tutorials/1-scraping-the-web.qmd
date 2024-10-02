@@ -70,6 +70,7 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 ```
 
+
 ## Loading Static Websites with `requests`
 
 The first step in scraping a website is to inspect its source code in your browser and load its content in a way Python can access. We can do the latter using the `requests` library. The `get()` function sends a request to the specified URL and returns a response object, which contains all the information sent back from the server, including the HTML source code.
@@ -94,6 +95,11 @@ First, we create a `BeautifulSoup` object by passing the HTML content to the `Be
 ```{python}
 html_content = response.text
 soup = BeautifulSoup(html_content, 'html.parser')
+```
+
+```{python}
+print(html_content)
+print(soup)
 ```
 
 ### Extracting Headers
@@ -235,7 +241,7 @@ for link in soup.find_all('a', href=True):
             link_data.append((text, href, True))
 ```
 
-Let's create a dataframe from this list.
+Let's create a pandas dataframe from this list.
 
 ```{python}
 link_df = pd.DataFrame(link_data, columns=['link-text', 'href', "external"])
@@ -307,7 +313,7 @@ for index, table in enumerate(tables):
     print(f"Table {index+1} Column Names: {headers}")
 ```
 
-This loop extracts the headers from each table, which can help us identify the tables we want.^[You may notice that I'm using the `strip` argument for `.get_text()` this time. I do find it useful in situations like these, where I want to see the column names (which rarely contain spaces) without any additional characters (such as `\n`, etc.).] Suppose we're looking for a table that contains information related to "Freedom to make life choices" or other specific indicators. We can easily find tables that contain the relevant column.
+This loop extracts the headers from each table, which can help us identify the tables we want.^[You may notice that I'm using the `strip` argument for `.get_text()` this time. I do find it useful in situations like these, where I want to see the column names (which rarely contain spaces) without any additional characters (such as `\n`, etc.).] We are interested in "Life evaluation score". But this is called differently in different tables. Hence, we note from the way these are constructed that we are looking for a table that contains information related to "Freedom to make life choices" or other specific indicators. We can easily find tables that contain the relevant column.
 
 ```{python}
 tables_filtered = [
@@ -328,7 +334,7 @@ len(dfs)
 
 Pandas' `read_html()` function is quite powerful and can automatically extract tables from HTML content. However, sometimes it might pick up more than we expect. In this case, it found an additional `{python} len(dfs) - len(tables_filtered)` tables in the same HTML string!
 
-Let's explore the extracted dataframes to see what we've got.
+Let's explore the extracted dataframes to see what we've got. Print column names:
 
 ```{python}
 for df in dfs:
@@ -344,7 +350,8 @@ example_df = dfs[0]
 example_df.head()
 ```
 
-If we just had one table, such as the one we're looking at here, we could easily clean it up by setting the second row as the header and dropping the irrelevant rows.
+NaN= not a number/missing data.
+If we just had one table, such as the one we're looking at here, we could easily clean it up by setting the second row as the header and dropping the irrelevant rows. iloc extracts relevant rows.
 
 ```{python}
 example_df.columns = example_df.iloc[1]
@@ -353,7 +360,7 @@ example_df = example_df.reset_index()
 example_df.head()
 ```
 
-This looks much better, but... we aren't ready to do this for all dataframes just yet. As part of diagnosing the problem, we can spend a bit more time inspecting the page's source code using our web browser's developer tools. This reveals the underlying source of the problem: **these tables are nested**! The tables we want are nested inside tables we don't care about. How do we get them out?
+This looks much better, but... we aren't ready to do this for all dataframes just yet. If you did this, you would end up with a bunch of duplicate data. As part of diagnosing the problem, we can spend a bit more time inspecting the page's source code using our web browser's developer tools. This reveals the underlying source of the problem: **these tables are nested**! The tables we want are nested inside tables we don't care about (and that pandas identifies). How do we get them out?
 
 To address this problem, we can update our approach to identify the outer tables and then, if and when it finds one, look for an inner table. Let's check the logic of this approach before implementing it.
 
@@ -382,9 +389,9 @@ Our goal is to extract tables from the webpage and associate each with the publi
 
 Our code is getting a bit more complex here. If you're new to Python, it's helps to know exactly what we are trying to do and why. Here it is, in brief:
 
-1. **Identify the year**. We can do this by looking for `h3` headers that contain a year (formatted as `YYYY`) followed by the word 'report.' We'll use a regular expression to identify the pattern. We'll keep track of the current year as we move through the document.
-2. **Associate tables with years**. After identifying a year, we check for the next table element. If a table is found, we associate it with the most recently identified year.
-3. **Handle Nested Tables**. We now know that some tables contain nested tables, and that the data we want is in the inner table. If a nested table is found, we'll keep and process the inner table and discard the outer table.
+1. **Identify the year**. We can do this by looking for `h3` headers that contain a year (formatted as `YYYY`) followed by the word 'report.' We'll use a regular expression to identify the pattern. We'll keep track of the current year as we move through the document. --> line 399
+2. **Associate tables with years**. After identifying a year, we check for the next table element. If a table is found, we associate it with the most recently identified year. --> line 400
+3. **Handle Nested Tables**. We now know that some tables contain nested tables, and that the data we want is in the inner table. If a nested table is found, we'll keep and process the inner table and discard the outer table. --> line 418
 
 ```{python}
 # Initialize variables
@@ -403,7 +410,7 @@ for element in soup.find_all(['h3', 'table']):
 
     # If the element is a table, associate it with the current year
     elif element.name == 'table' and current_year:
-        # Convert the outer table element to a DataFrame
+        # Convert the outer table element to a DataFrame and extract for the first table that it finds (i.e., outer table)
         outer_html_string = str(element)
         outer_table_df = pd.read_html(StringIO(outer_html_string))[0]
 
@@ -424,14 +431,15 @@ for element in soup.find_all(['h3', 'table']):
 len(tables_with_years)
 ```
 
-Now that we've collected the tables and associated them with their respective years, let's inspect them to ensure the data was extracted correctly. We'll loop through the list of tables and check their column names.
+We have 20 tables, meaning there are some duplicates that need to be filtered out. Now that we've collected the tables and associated them with their respective years, let's inspect them to ensure the data was extracted correctly. We'll loop through the list of tables and check their column names.
+Using enumerate, we list tables. Using i means that we are looking at any item.
 
 ```{python}
 for i, table in enumerate(tables_with_years):
     print(f"Table {i} columns:", list(table.columns))
 ```
 
-Most of these tables look good, although there are two tables that look like they may need some additional work (14 and 15), and we seem to have some duplicate tables.
+Most of these tables look good, although there are two tables that look like they may need some additional work (14 and 15), and we seem to have some duplicate tables. There are differences in the names used.
 
 ```{python}
 tables_with_years[14].head()
@@ -476,10 +484,12 @@ Our next steps, then, are as follows:
 
 Let's select the dataframes with a "Life evaluation" column.^[Gallupe's **Life evaluation index** is a measure of subjective wellbeing based on how people rate their current and expected future lives. Gallupe asks people to pick a number between 0 and 10 where 0 represents their worst possible life and 10 represents their best possible life. Participants say where they feel they are now, and where they thing they will be in 5 years. You can learn a bit more about the index from [Gallupe](https://www.gallup.com/394505/indicator-life-evaluation-index.aspx#:~:text=What%20We%20Measure-,The%20Life%20Evaluation%20Index%20measures%20how%20people%20rate%20their%20current,Global%20Life%20Evaluation%20Index), or by browsing the World Happiness Reports [here](https://worldhappiness.report/archive/).] It appears that only two of our dataframes contain this data, but that's due to inconsistent naming; the "Life evaluation" score is simply labelled "Score" in some dataframes. Additionally, some dataframes have a column called 'Country or region' and others have "Country." Let's align these column names.
 
+Change heading for objects that have true:
+
 ```{python}
 new_columns = {
   "Country": "Country or region",
-  "Score": "Life evaluation"
+  "Score": "Life evaluation", "Happiness": "Life evaluation"
 }
 
 for df in tables_with_years:
@@ -490,6 +500,8 @@ for df in tables_with_years:
 for i, table in enumerate(tables_with_years):
     print(f"Table {i} columns:", list(table.columns))
 ```
+
+Finalize, drop duplicates and nans:
 
 ```{python}
 final_dfs = []
@@ -505,6 +517,8 @@ final_df.info()
 ```
 
 It *looks* good, but there's actually a problem lurking in this dataframe. If you inspect the output from `info()`, you'll see that `Life evaluation` is actually an object / string, not a float. If we convert it to a float, most of our data gets converted to `NaN`s! 😲
+
+We can force and tell pandas to convert it into a number... But it creates many nans
 
 ```{python}
 will_have_nans = final_df.copy()
@@ -549,6 +563,8 @@ final_df.info()
 ```
 
 We now have a float without missing values! 🔥😎
+
+Print and sort by highest 'Life evaluation' score.
 
 ```{python}
 final_df.sort_values('Life evaluation', ascending=False, inplace=True)

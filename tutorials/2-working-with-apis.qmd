@@ -97,7 +97,7 @@ Your API key is now ready to use!
 There are a few ways you can securely use your API key. The approach we'll use here is to store your key(s) in a special file that we can load whenever we need to authenticate with YouTube. From the command line, create a new file called `.env` in the project directory.
 
 ```zsh
-cd computational-social-science
+cd obtaining-data-from-the-web
 touch .env
 ```
 
@@ -111,7 +111,7 @@ If you have more than one API key (which can come in handy), make sure each key 
 
 ## Setup
 
-Now that you have your API keys setup, load the packages we'll use in this tutorial. Most of the heavy listing will be done by the YouTube module of the course package, `icsspy`.
+Now that you have your API keys setup, load the packages we'll use in this tutorial. Most of the heavy listing will be done by the YouTube module of the course package, `icsspy`. Uses single packages in this version:
 
 ```{python}
 import pandas as pd
@@ -121,10 +121,11 @@ import src.cleaners as clean
 import src.utils as utils
 ```
 
+Module YT from the course.
 We can load our API key(s) using a utility function from icsspy and then initialize the YouTubeAPI class I developed to simplify using multiple API keys at once,^[Follow the instructions above to make sure you have your .env file setup correctly.] which is useful if you need to switch between them due to rate limits.
 
 ```{python}
-KEY_NAMES = ["GESIS", "GESISPY", "INTRO_CSS", "INTROCSS2024", "YouTubeAPILecture", "metascience_golems", "McLevey", "MSGD"]
+KEY_NAMES = ["API_1"]
 API_KEYS = utils.load_api_key_list(KEY_NAMES)
 YOUTUBE_API = yt.YouTubeAPI(API_KEYS)
 ```
@@ -225,7 +226,7 @@ collect = has_public_comments
 # collect = has_public_comments + probably_no_public_comments
 
 # set this to true the first time you run it; then false
-# overwrite = True 
+#overwrite = True 
 overwrite = False 
 ```
 
